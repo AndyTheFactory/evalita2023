@@ -1,0 +1,9 @@
+torch==1.13.1
+pandas
+nltk
+scipy
+scikit-learn
+transformers
+torchtext
+numpy
+tqdm
