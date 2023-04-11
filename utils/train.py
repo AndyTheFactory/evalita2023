@@ -31,6 +31,42 @@ class TrainInfo:
     self.train_loss.append(train_loss)
 
 
+class EarlyStopper:
+    def __init__(self, patience=1, min_delta=0):
+        self.patience = patience
+        self.min_delta = min_delta
+        self.counter = 0
+        self.best_metric = 0
+        self.best_loss = np.inf
+
+    def early_stop(self, metric):
+        if metric > self.best_metric:
+            self.best_metric = metric
+            self.counter = 0
+        elif metric < (self.best_metric - self.min_delta):
+            self.counter += 1
+            if self.counter >= self.patience:
+                return True
+        return False
+    
+    def early_stop_loss(self, loss):
+        if loss < self.best_loss:
+            self.best_loss = loss
+            self.counter = 0
+        elif loss > (self.best_loss - self.min_delta):
+            self.counter += 1
+            if self.counter >= self.patience:
+                return True
+        return False
+    
+def data_to_device(d, device):
+  if isinstance(d['input_ids'],list):
+      d['input_ids'] = torch.stack(d['input_ids'],1)
+  for k in d:
+    if isinstance(d[k],torch.Tensor):
+      d[k] = d[k].to(device)        
+  return d
+
 def train_epoch(model, data_loader, loss_fn, optimizer,  scheduler, epoch=1):
 
   model = model.train()
@@ -43,15 +79,10 @@ def train_epoch(model, data_loader, loss_fn, optimizer,  scheduler, epoch=1):
 
   for d in tqdm(data_loader, desc=f'Training Epoch {epoch} '):
 
-    if isinstance(d['input_ids'],list):
-      input_ids = torch.stack(d['input_ids'],1).to(device)
-    else:
-      input_ids = d['input_ids'].to(device)
-
-    targets = d["label"].to(device)
-    outputs = model(
-      input_ids=input_ids,
-    )
+    d = data_to_device(d, device)
+  
+    targets = d["label"]
+    outputs = model(**d)
 
     _, preds = torch.max(outputs, dim=1)
     loss = loss_fn(outputs, targets)
@@ -61,61 +92,6 @@ def train_epoch(model, data_loader, loss_fn, optimizer,  scheduler, epoch=1):
 
     predict_out.extend(preds.tolist())
     all_label_ids.extend(targets.tolist())
-
-    nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
-    optimizer.step()
-    scheduler.step()
-    optimizer.zero_grad()
-
-  f1_metrics=f1_score(np.array(all_label_ids).reshape(-1),
-      np.array(predict_out).reshape(-1), average='weighted')
-  report = classification_report(np.array(all_label_ids).reshape(-1),
-      np.array(predict_out).reshape(-1),digits=4)
-  print("Report:\n"+report)
-  n_examples = len(all_label_ids)
-  return correct_predictions.double() / n_examples, f1_metrics, report, np.mean(losses)
-
-
-
-def train_epoch_multi(model, data_loader, loss_fn1, loss_fn2, optimizer,  scheduler, epoch=1):
-
-  model = model.train()
-  device = model.device
-  losses = []
-  mlm_losses = []
-  predict_out = []
-  all_label_ids = []
-
-  correct_predictions = 0
-
-  data = tqdm(data_loader, desc=f'Training Epoch {epoch} ')
-  for d in data:
-    data.set_description(f'Training Epoch {epoch} / mlm loss: {np.mean(mlm_losses):.4f}  / classification loss: {np.mean(losses):.4f}')
-    input_ids = d['input_ids'].to(device)
-    batch_task = max(d["task"])
-
-    outputs = model(
-      input_ids=input_ids,
-      task=batch_task
-    )
-    targets = d["label"].to(device)
-
-    if batch_task == "mlm":
-      
-      loss = loss_fn1(outputs.transpose(1,2), targets)
-      mlm_losses.append(loss.item())
-
-    else:
-     
-      _, preds = torch.max(outputs, dim=1)
-      loss = loss_fn2(outputs, targets)
-      correct_predictions += torch.sum(preds == targets)
-      losses.append(loss.item())
-    
-      predict_out.extend(preds.tolist())
-      all_label_ids.extend(targets.tolist())
-
-    loss.backward()
 
     nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
     optimizer.step()
@@ -143,15 +119,10 @@ def eval_model(model, data_loader, loss_fn):
 
   with torch.no_grad():
     for d in tqdm(data_loader, desc='Evaluation Process'):
-      if isinstance(d['input_ids'],list):
-        input_ids = torch.stack(d['input_ids'],1).to(device)
-      else:
-        input_ids = d['input_ids'].to(device)
-
-      targets = d["label"].to(device)
-      outputs = model(
-        input_ids=input_ids,
-      )
+      
+      d = data_to_device(d, device)
+      targets = d["label"]
+      outputs = model(**d)
 
       _, preds = torch.max(outputs, dim=1)
       loss = loss_fn(outputs, targets)
@@ -179,14 +150,10 @@ def predict(model,data_loader):
 
   with torch.no_grad():
     for d in tqdm(data_loader, desc='Predict data'):
-      if isinstance(d['input_ids'],list):
-        input_ids = torch.stack(d['input_ids'],1).to(device)
-      else:
-        input_ids = d['input_ids'].to(device)
 
-      outputs = model(
-        input_ids=input_ids,
-      )
+      d = data_to_device(d, device)
+      outputs = model(**d)
+      
       _, preds = torch.max(outputs, dim=1)
 
       predict_out.extend(preds.tolist())

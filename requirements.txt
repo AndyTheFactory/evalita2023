@@ -1,4 +1,4 @@
-torch==1.13.1
+torch
 pandas
 nltk
 scipy
@@ -7,3 +7,5 @@ transformers
 torchtext
 numpy
 tqdm
+setfit
+sentence-transformers
