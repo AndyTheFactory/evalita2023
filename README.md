@@ -9,7 +9,7 @@ methodology, enabling us to achieve first place in the final leaderboard of both
 ```
 
 Citation:
-@inproceedings{acti2021upb,
+@inproceedings{acti2023upb,
   title={UPB at ACTI: Detecting Conspiracies using fine tuned Sentence Transformers},
   author={Paraschiv, Andrei and Dascalu, Mihai},
   booktitle={Proceedings of the 9th Evaluation Campaign of Natural Language Processing and Speech Tools for Italian. Final Workshop (EVALITA 2023)},
